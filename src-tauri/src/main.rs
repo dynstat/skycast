@@ -8,11 +8,6 @@ use std::{
 
 use sysinfo::{Pid, ProcessesToUpdate, System};
 
-struct UsageState {
-    system: Mutex<System>,
-    pid: Pid,
-}
-
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AppUsage {
@@ -21,6 +16,10 @@ struct AppUsage {
     virtual_memory_bytes: u64,
     pid: u32,
     timestamp_ms: u64,
+}
+struct UsageState {
+    system: Mutex<System>,
+    pid: Pid,
 }
 
 impl UsageState {

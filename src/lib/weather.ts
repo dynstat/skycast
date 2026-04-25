@@ -165,53 +165,40 @@ const GEOCODE_BASE = "https://geocoding-api.open-meteo.com/v1";
 const AIR_BASE = "https://air-quality-api.open-meteo.com/v1/air-quality";
 
 export const DEFAULT_PLACE: Place = {
-  id: "5128581",
-  name: "New York",
-  admin1: "New York",
-  country: "United States",
-  latitude: 40.7143,
-  longitude: -74.006,
-  timezone: "America/New_York"
+  id: "1275339",
+  name: "Mumbai",
+  admin1: "Maharashtra",
+  country: "India",
+  latitude: 19.0728,
+  longitude: 72.8826,
+  timezone: "Asia/Kolkata",
 };
 
 export const QUICK_PLACES: Place[] = [
   DEFAULT_PLACE,
-  {
-    id: "2643743",
-    name: "London",
-    country: "United Kingdom",
-    latitude: 51.5085,
-    longitude: -0.1257,
-    timezone: "Europe/London"
-  },
-  {
-    id: "2988507",
-    name: "Paris",
-    country: "France",
-    latitude: 48.8534,
-    longitude: 2.3488,
-    timezone: "Europe/Paris"
-  },
   {
     id: "1850147",
     name: "Tokyo",
     country: "Japan",
     latitude: 35.6895,
     longitude: 139.6917,
-    timezone: "Asia/Tokyo"
+    timezone: "Asia/Tokyo",
   },
   {
-    id: "1275339",
-    name: "Mumbai",
-    admin1: "Maharashtra",
-    country: "India",
-    latitude: 19.0728,
-    longitude: 72.8826,
-    timezone: "Asia/Kolkata"
-  }
+    id: "5128581",
+    name: "New York",
+    admin1: "New York",
+    country: "United States",
+    latitude: 40.7143,
+    longitude: -74.006,
+    timezone: "America/New_York",
+  },
 ];
 
-export async function searchPlaces(query: string, signal?: AbortSignal): Promise<Place[]> {
+export async function searchPlaces(
+  query: string,
+  signal?: AbortSignal,
+): Promise<Place[]> {
   const trimmed = query.trim();
 
   if (trimmed.length < 2) {
@@ -229,7 +216,7 @@ export async function searchPlaces(query: string, signal?: AbortSignal): Promise
 export async function reverseGeocode(
   latitude: number,
   longitude: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<Place> {
   const url = `${GEOCODE_BASE}/reverse?latitude=${latitude}&longitude=${longitude}&language=en&format=json`;
 
@@ -248,11 +235,14 @@ export async function reverseGeocode(
     id: `${latitude.toFixed(4)},${longitude.toFixed(4)}`,
     name: "Current location",
     latitude,
-    longitude
+    longitude,
   };
 }
 
-export async function fetchForecast(place: Place, signal?: AbortSignal): Promise<ForecastData> {
+export async function fetchForecast(
+  place: Place,
+  signal?: AbortSignal,
+): Promise<ForecastData> {
   const url = new URL(FORECAST_BASE);
 
   url.search = new URLSearchParams({
@@ -273,7 +263,7 @@ export async function fetchForecast(place: Place, signal?: AbortSignal): Promise
       "surface_pressure",
       "wind_speed_10m",
       "wind_direction_10m",
-      "wind_gusts_10m"
+      "wind_gusts_10m",
     ].join(","),
     hourly: [
       "temperature_2m",
@@ -287,7 +277,7 @@ export async function fetchForecast(place: Place, signal?: AbortSignal): Promise
       "wind_gusts_10m",
       "uv_index",
       "visibility",
-      "surface_pressure"
+      "surface_pressure",
     ].join(","),
     daily: [
       "weather_code",
@@ -301,15 +291,15 @@ export async function fetchForecast(place: Place, signal?: AbortSignal): Promise
       "precipitation_sum",
       "precipitation_probability_max",
       "wind_speed_10m_max",
-      "wind_gusts_10m_max"
+      "wind_gusts_10m_max",
     ].join(","),
     timezone: "auto",
-    forecast_days: "10"
+    forecast_days: "10",
   }).toString();
 
   const [weather, airQuality] = await Promise.all([
     fetchJson<WeatherApiResponse>(url.toString(), signal),
-    fetchAirQuality(place, signal).catch(() => null)
+    fetchAirQuality(place, signal).catch(() => null),
   ]);
 
   return {
@@ -330,7 +320,7 @@ export async function fetchForecast(place: Place, signal?: AbortSignal): Promise
       surfacePressure: safeNumber(weather.current.surface_pressure),
       windSpeed: safeNumber(weather.current.wind_speed_10m),
       windDirection: safeNumber(weather.current.wind_direction_10m),
-      windGusts: safeNumber(weather.current.wind_gusts_10m)
+      windGusts: safeNumber(weather.current.wind_gusts_10m),
     },
     hourly: mapHourly(weather).slice(0, 36),
     daily: mapDaily(weather),
@@ -338,11 +328,14 @@ export async function fetchForecast(place: Place, signal?: AbortSignal): Promise
     updatedAt: new Date().toISOString(),
     timezone: weather.timezone,
     timezoneAbbreviation: weather.timezone_abbreviation,
-    elevation: weather.elevation
+    elevation: weather.elevation,
   };
 }
 
-async function fetchAirQuality(place: Place, signal?: AbortSignal): Promise<AirQuality | null> {
+async function fetchAirQuality(
+  place: Place,
+  signal?: AbortSignal,
+): Promise<AirQuality | null> {
   const url = new URL(AIR_BASE);
 
   url.search = new URLSearchParams({
@@ -350,7 +343,7 @@ async function fetchAirQuality(place: Place, signal?: AbortSignal): Promise<AirQ
     longitude: String(place.longitude),
     hourly: "us_aqi,pm2_5,pm10,ozone",
     timezone: "auto",
-    forecast_days: "2"
+    forecast_days: "2",
   }).toString();
 
   const data = await fetchJson<AirQualityResponse>(url.toString(), signal);
@@ -368,7 +361,7 @@ async function fetchAirQuality(place: Place, signal?: AbortSignal): Promise<AirQ
     pm25: nullableNumber(hourly.pm2_5?.[index]),
     pm10: nullableNumber(hourly.pm10?.[index]),
     ozone: nullableNumber(hourly.ozone?.[index]),
-    label: getAqiLabel(aqi)
+    label: getAqiLabel(aqi),
   };
 }
 
@@ -390,7 +383,9 @@ function mapHourly(weather: WeatherApiResponse): HourlyWeather[] {
     temperature: safeNumber(hourly.temperature_2m[index]),
     apparentTemperature: safeNumber(hourly.apparent_temperature[index]),
     humidity: safeNumber(hourly.relative_humidity_2m[index]),
-    precipitationProbability: safeNumber(hourly.precipitation_probability[index]),
+    precipitationProbability: safeNumber(
+      hourly.precipitation_probability[index],
+    ),
     precipitation: safeNumber(hourly.precipitation[index]),
     weatherCode: safeNumber(hourly.weather_code[index]),
     cloudCover: safeNumber(hourly.cloud_cover[index]),
@@ -398,7 +393,7 @@ function mapHourly(weather: WeatherApiResponse): HourlyWeather[] {
     windGusts: safeNumber(hourly.wind_gusts_10m[index]),
     uvIndex: safeNumber(hourly.uv_index[index]),
     visibility: safeNumber(hourly.visibility[index]),
-    pressure: safeNumber(hourly.surface_pressure[index])
+    pressure: safeNumber(hourly.surface_pressure[index]),
   }));
 }
 
@@ -416,9 +411,11 @@ function mapDaily(weather: WeatherApiResponse): DailyWeather[] {
     sunset: daily.sunset[index],
     uvIndexMax: safeNumber(daily.uv_index_max[index]),
     precipitationSum: safeNumber(daily.precipitation_sum[index]),
-    precipitationProbabilityMax: safeNumber(daily.precipitation_probability_max[index]),
+    precipitationProbabilityMax: safeNumber(
+      daily.precipitation_probability_max[index],
+    ),
     windSpeedMax: safeNumber(daily.wind_speed_10m_max[index]),
-    windGustsMax: safeNumber(daily.wind_gusts_10m_max[index])
+    windGustsMax: safeNumber(daily.wind_gusts_10m_max[index]),
   }));
 }
 
@@ -434,7 +431,7 @@ function toPlace(result: GeocodeResult): Place {
     country: result.country,
     latitude: result.latitude,
     longitude: result.longitude,
-    timezone: result.timezone
+    timezone: result.timezone,
   };
 }
 
@@ -446,7 +443,10 @@ function nearestHourlyIndex(times: string[], now: Date): number {
     return exactHour;
   }
 
-  return Math.max(0, times.findIndex((time) => time > currentHour));
+  return Math.max(
+    0,
+    times.findIndex((time) => time > currentHour),
+  );
 }
 
 function getAqiLabel(aqi: number | null): string {
