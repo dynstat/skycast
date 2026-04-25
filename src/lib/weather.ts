@@ -153,16 +153,29 @@ type WeatherApiResponse = {
 type AirQualityResponse = {
   hourly?: {
     time: string[];
-    us_aqi?: number[];
     pm2_5?: number[];
     pm10?: number[];
     ozone?: number[];
   };
 };
 
+type WaqiResponse = {
+  status: "ok" | "error";
+  data?: {
+    aqi?: number | string;
+    iaqi?: {
+      pm25?: { v?: number };
+      pm10?: { v?: number };
+      o3?: { v?: number };
+    };
+  };
+};
+
 const FORECAST_BASE = "https://api.open-meteo.com/v1/forecast";
 const GEOCODE_BASE = "https://geocoding-api.open-meteo.com/v1";
 const AIR_BASE = "https://air-quality-api.open-meteo.com/v1/air-quality";
+const WAQI_BASE = "https://api.waqi.info/feed";
+const WAQI_TOKEN = import.meta.env.VITE_WAQI_TOKEN?.trim() ?? "";
 
 export const DEFAULT_PLACE: Place = {
   id: "1275339",
@@ -336,12 +349,52 @@ async function fetchAirQuality(
   place: Place,
   signal?: AbortSignal,
 ): Promise<AirQuality | null> {
+  if (WAQI_TOKEN) {
+    try {
+      return await fetchWaqiAirQuality(place, signal);
+    } catch {
+      // Fall back to the existing source if WAQI is unavailable.
+    }
+  }
+
+  return fetchOpenMeteoAirQuality(place, signal);
+}
+
+async function fetchWaqiAirQuality(
+  place: Place,
+  signal?: AbortSignal,
+): Promise<AirQuality | null> {
+  const url = `${WAQI_BASE}/geo:${place.latitude};${place.longitude}/?token=${encodeURIComponent(WAQI_TOKEN)}`;
+  const data = await fetchJson<WaqiResponse>(url, signal);
+
+  if (data.status !== "ok" || !data.data) {
+    return null;
+  }
+
+  const aqi = nullableNumber(data.data.aqi);
+  const pm25 = nullableNumber(data.data.iaqi?.pm25?.v);
+  const pm10 = nullableNumber(data.data.iaqi?.pm10?.v);
+  const ozone = nullableNumber(data.data.iaqi?.o3?.v);
+
+  return {
+    aqi,
+    pm25,
+    pm10,
+    ozone,
+    label: getAqiLabel(aqi),
+  };
+}
+
+async function fetchOpenMeteoAirQuality(
+  place: Place,
+  signal?: AbortSignal,
+): Promise<AirQuality | null> {
   const url = new URL(AIR_BASE);
 
   url.search = new URLSearchParams({
     latitude: String(place.latitude),
     longitude: String(place.longitude),
-    hourly: "us_aqi,pm2_5,pm10,ozone",
+    hourly: "pm2_5,pm10,ozone",
     timezone: "auto",
     forecast_days: "2",
   }).toString();
@@ -354,13 +407,16 @@ async function fetchAirQuality(
   }
 
   const index = nearestHourlyIndex(hourly.time, new Date());
-  const aqi = nullableNumber(hourly.us_aqi?.[index]);
+  const pm25 = nullableNumber(hourly.pm2_5?.[index]);
+  const pm10 = nullableNumber(hourly.pm10?.[index]);
+  const ozone = nullableNumber(hourly.ozone?.[index]);
+  const aqi = calculateUsAqi(pm25, pm10);
 
   return {
     aqi,
-    pm25: nullableNumber(hourly.pm2_5?.[index]),
-    pm10: nullableNumber(hourly.pm10?.[index]),
-    ozone: nullableNumber(hourly.ozone?.[index]),
+    pm25,
+    pm10,
+    ozone,
     label: getAqiLabel(aqi),
   };
 }
@@ -453,16 +509,92 @@ function getAqiLabel(aqi: number | null): string {
   if (aqi === null) return "Unavailable";
   if (aqi <= 50) return "Good";
   if (aqi <= 100) return "Moderate";
-  if (aqi <= 150) return "Sensitive";
+  if (aqi <= 150) return "Unhealthy for sensitive groups";
   if (aqi <= 200) return "Unhealthy";
   if (aqi <= 300) return "Very unhealthy";
   return "Hazardous";
 }
+
+function calculateUsAqi(pm25: number | null, pm10: number | null): number | null {
+  const components = [
+    pm25 === null ? null : calculateAqiFromBreakpoint(truncatePm25(pm25), PM25_BREAKPOINTS),
+    pm10 === null ? null : calculateAqiFromBreakpoint(Math.round(pm10), PM10_BREAKPOINTS)
+  ].filter((value): value is number => value !== null);
+
+  if (components.length === 0) {
+    return null;
+  }
+
+  return Math.max(...components);
+}
+
+function calculateAqiFromBreakpoint(
+  concentration: number,
+  breakpoints: readonly Breakpoint[]
+): number | null {
+  const matching = breakpoints.find(
+    (breakpoint) => concentration >= breakpoint.concLow && concentration <= breakpoint.concHigh
+  );
+
+  if (!matching) {
+    const highest = breakpoints[breakpoints.length - 1];
+
+    if (concentration > highest.concHigh) {
+      return 500;
+    }
+
+    return null;
+  }
+
+  const ratio = (concentration - matching.concLow) / (matching.concHigh - matching.concLow);
+
+  return Math.round(ratio * (matching.aqiHigh - matching.aqiLow) + matching.aqiLow);
+}
+
+function truncatePm25(value: number): number {
+  return Math.floor(value * 10) / 10;
+}
+
+type Breakpoint = {
+  aqiLow: number;
+  aqiHigh: number;
+  concLow: number;
+  concHigh: number;
+};
+
+const PM25_BREAKPOINTS: readonly Breakpoint[] = [
+  { aqiLow: 0, aqiHigh: 50, concLow: 0, concHigh: 12 },
+  { aqiLow: 51, aqiHigh: 100, concLow: 12.1, concHigh: 35.4 },
+  { aqiLow: 101, aqiHigh: 150, concLow: 35.5, concHigh: 55.4 },
+  { aqiLow: 151, aqiHigh: 200, concLow: 55.5, concHigh: 150.4 },
+  { aqiLow: 201, aqiHigh: 300, concLow: 150.5, concHigh: 250.4 },
+  { aqiLow: 301, aqiHigh: 400, concLow: 250.5, concHigh: 350.4 },
+  { aqiLow: 401, aqiHigh: 500, concLow: 350.5, concHigh: 500.4 }
+] as const;
+
+const PM10_BREAKPOINTS: readonly Breakpoint[] = [
+  { aqiLow: 0, aqiHigh: 50, concLow: 0, concHigh: 54 },
+  { aqiLow: 51, aqiHigh: 100, concLow: 55, concHigh: 154 },
+  { aqiLow: 101, aqiHigh: 150, concLow: 155, concHigh: 254 },
+  { aqiLow: 151, aqiHigh: 200, concLow: 255, concHigh: 354 },
+  { aqiLow: 201, aqiHigh: 300, concLow: 355, concHigh: 424 },
+  { aqiLow: 301, aqiHigh: 400, concLow: 425, concHigh: 504 },
+  { aqiLow: 401, aqiHigh: 500, concLow: 505, concHigh: 604 }
+] as const;
 
 function safeNumber(value: unknown, fallback = 0): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
 function nullableNumber(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
 }
