@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   Activity,
@@ -19,7 +26,7 @@ import {
   Thermometer,
   Umbrella,
   Wind,
-  Zap
+  Zap,
 } from "lucide-react";
 import { ForecastChart, type ChartMode } from "./components/ForecastChart";
 import { MetricCard } from "./components/MetricCard";
@@ -33,7 +40,7 @@ import {
   searchPlaces,
   type ForecastData,
   type Place,
-  type Units
+  type Units,
 } from "./lib/weather";
 import { getWeatherMeta } from "./lib/weatherCodes";
 import {
@@ -43,7 +50,7 @@ import {
   formatPrecipitation,
   formatTemperature,
   formatVisibility,
-  formatWind
+  formatWind,
 } from "./lib/units";
 
 type LoadStatus = "loading" | "ready" | "error";
@@ -60,13 +67,19 @@ type AppUsage = {
 const STORAGE_KEYS = {
   place: "skycast.selectedPlace",
   units: "skycast.units",
-  favorites: "skycast.favorites"
+  favorites: "skycast.favorites",
 };
 
 function App() {
-  const [selectedPlace, setSelectedPlace] = useStoredState<Place>(STORAGE_KEYS.place, DEFAULT_PLACE);
+  const [selectedPlace, setSelectedPlace] = useStoredState<Place>(
+    STORAGE_KEYS.place,
+    DEFAULT_PLACE,
+  );
   const [units, setUnits] = useStoredState<Units>(STORAGE_KEYS.units, "metric");
-  const [favorites, setFavorites] = useStoredState<Place[]>(STORAGE_KEYS.favorites, [DEFAULT_PLACE]);
+  const [favorites, setFavorites] = useStoredState<Place[]>(
+    STORAGE_KEYS.favorites,
+    [DEFAULT_PLACE],
+  );
   const [forecast, setForecast] = useState<ForecastData | null>(null);
   const [status, setStatus] = useState<LoadStatus>("loading");
   const [error, setError] = useState("");
@@ -77,24 +90,31 @@ function App() {
   const [chartMode, setChartMode] = useState<ChartMode>("temperature");
   const { usage, usageStatus } = useAppUsage();
 
-  const loadForecast = useCallback(async (place: Place, signal?: AbortSignal) => {
-    setStatus("loading");
-    setError("");
+  const loadForecast = useCallback(
+    async (place: Place, signal?: AbortSignal) => {
+      setStatus("loading");
+      setError("");
 
-    try {
-      const data = await fetchForecast(place, signal);
+      try {
+        const data = await fetchForecast(place, signal);
 
-      if (!signal?.aborted) {
-        setForecast(data);
-        setStatus("ready");
+        if (!signal?.aborted) {
+          setForecast(data);
+          setStatus("ready");
+        }
+      } catch (loadError) {
+        if (signal?.aborted) return;
+
+        setStatus("error");
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to load forecast.",
+        );
       }
-    } catch (loadError) {
-      if (signal?.aborted) return;
-
-      setStatus("error");
-      setError(loadError instanceof Error ? loadError.message : "Unable to load forecast.");
-    }
-  }, []);
+    },
+    [],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -144,9 +164,17 @@ function App() {
     ? getWeatherMeta(forecast.current.weatherCode, forecast.current.isDay)
     : getWeatherMeta(0, true);
   const today = forecast?.daily[0];
-  const placeIsFavorite = favorites.some((favorite) => isSamePlace(favorite, currentPlace));
-  const placeShelf = useMemo(() => uniquePlaces([...favorites, ...QUICK_PLACES]).slice(0, 8), [favorites]);
-  const insights = useMemo(() => (forecast ? buildInsights(forecast, units) : []), [forecast, units]);
+  const placeIsFavorite = favorites.some((favorite) =>
+    isSamePlace(favorite, currentPlace),
+  );
+  const placeShelf = useMemo(
+    () => uniquePlaces([...favorites, ...QUICK_PLACES]).slice(0, 8),
+    [favorites],
+  );
+  const insights = useMemo(
+    () => (forecast ? buildInsights(forecast, units) : []),
+    [forecast, units],
+  );
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -170,7 +198,11 @@ function App() {
         setError("No matching locations were found.");
       }
     } catch (searchError) {
-      setError(searchError instanceof Error ? searchError.message : "Location search failed.");
+      setError(
+        searchError instanceof Error
+          ? searchError.message
+          : "Location search failed.",
+      );
     } finally {
       setSearching(false);
     }
@@ -198,7 +230,10 @@ function App() {
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
-          const place = await reverseGeocode(position.coords.latitude, position.coords.longitude);
+          const place = await reverseGeocode(
+            position.coords.latitude,
+            position.coords.longitude,
+          );
           setSelectedPlace(place);
         } finally {
           setLocating(false);
@@ -211,15 +246,17 @@ function App() {
       {
         enableHighAccuracy: true,
         timeout: 10000,
-        maximumAge: 600000
-      }
+        maximumAge: 600000,
+      },
     );
   };
 
   const toggleFavorite = () => {
     setFavorites((current) => {
       if (current.some((favorite) => isSamePlace(favorite, currentPlace))) {
-        return current.filter((favorite) => !isSamePlace(favorite, currentPlace));
+        return current.filter(
+          (favorite) => !isSamePlace(favorite, currentPlace),
+        );
       }
 
       return uniquePlaces([currentPlace, ...current]).slice(0, 10);
@@ -257,7 +294,11 @@ function App() {
           {suggestions.length > 0 && (
             <div className="suggestion-menu">
               {suggestions.map((place) => (
-                <button key={place.id} type="button" onMouseDown={() => selectPlace(place)}>
+                <button
+                  key={place.id}
+                  type="button"
+                  onMouseDown={() => selectPlace(place)}
+                >
                   <MapPin size={16} />
                   <span>{formatPlace(place)}</span>
                 </button>
@@ -283,11 +324,24 @@ function App() {
               °F
             </button>
           </div>
-          <button className="icon-button" type="button" onClick={handleUseLocation} title="Current location">
+          <button
+            className="icon-button"
+            type="button"
+            onClick={handleUseLocation}
+            title="Current location"
+          >
             <LocateFixed size={18} className={locating ? "spin" : ""} />
           </button>
-          <button className="icon-button" type="button" onClick={handleRefresh} title="Refresh forecast">
-            <RefreshCw size={18} className={status === "loading" ? "spin" : ""} />
+          <button
+            className="icon-button"
+            type="button"
+            onClick={handleRefresh}
+            title="Refresh forecast"
+          >
+            <RefreshCw
+              size={18}
+              className={status === "loading" ? "spin" : ""}
+            />
           </button>
           <button
             className={`icon-button ${placeIsFavorite ? "is-favorite" : ""}`}
@@ -330,10 +384,14 @@ function App() {
           <p>{formatPlace(selectedPlace)}</p>
         </section>
       ) : (
-        <section className={`dashboard ${status === "loading" ? "is-refreshing" : ""}`}>
+        <section
+          className={`dashboard ${status === "loading" ? "is-refreshing" : ""}`}
+        >
           <section className={`panel current-panel panel--${currentMeta.tone}`}>
             <div className="current-panel__copy">
-              <p className="eyebrow">{forecast.timezoneAbbreviation ?? forecast.timezone}</p>
+              <p className="eyebrow">
+                {forecast.timezoneAbbreviation ?? forecast.timezone}
+              </p>
               <h1>{formatPlace(currentPlace)}</h1>
               <div className="current-temperature">
                 {formatTemperature(forecast.current.temperature, units)}
@@ -342,7 +400,13 @@ function App() {
               <div className="condition-line">
                 <WeatherIcon kind={currentMeta.kind} size={22} />
                 <strong>{currentMeta.label}</strong>
-                <span>Feels {formatTemperature(forecast.current.apparentTemperature, units)}</span>
+                <span>
+                  Feels{" "}
+                  {formatTemperature(
+                    forecast.current.apparentTemperature,
+                    units,
+                  )}
+                </span>
               </div>
             </div>
 
@@ -362,7 +426,10 @@ function App() {
 
           <section className="insight-grid" aria-label="Forecast signals">
             {insights.map((insight) => (
-              <article key={insight.label} className={`insight-card insight-card--${insight.tone}`}>
+              <article
+                key={insight.label}
+                className={`insight-card insight-card--${insight.tone}`}
+              >
                 <span>{insight.label}</span>
                 <strong>{insight.value}</strong>
                 <p>{insight.detail}</p>
@@ -370,7 +437,10 @@ function App() {
             ))}
           </section>
 
-          <section className="metrics-grid" aria-label="Current weather metrics">
+          <section
+            className="metrics-grid"
+            aria-label="Current weather metrics"
+          >
             <MetricCard
               icon={<Droplets size={22} />}
               label="Humidity"
@@ -400,13 +470,20 @@ function App() {
                   ? `${formatTemperature(today.maxTemperature, units)} / ${formatTemperature(today.minTemperature, units)}`
                   : "--"
               }
-              detail={today ? `${Math.round(today.precipitationProbabilityMax)}% rain peak` : "--"}
+              detail={
+                today
+                  ? `${Math.round(today.precipitationProbabilityMax)}% rain peak`
+                  : "--"
+              }
               accent="amber"
             />
             <MetricCard
               icon={<Eye size={22} />}
               label="Visibility"
-              value={formatVisibility(forecast.hourly[0]?.visibility ?? 0, units)}
+              value={formatVisibility(
+                forecast.hourly[0]?.visibility ?? 0,
+                units,
+              )}
               detail={`${Math.round(forecast.current.surfacePressure)} hPa surface`}
               accent="coral"
             />
@@ -419,7 +496,12 @@ function App() {
             />
           </section>
 
-          <ForecastChart data={forecast.hourly} mode={chartMode} units={units} onModeChange={setChartMode} />
+          <ForecastChart
+            data={forecast.hourly}
+            mode={chartMode}
+            units={units}
+            onModeChange={setChartMode}
+          />
 
           <section className="panel hourly-panel">
             <div className="panel-heading">
@@ -431,14 +513,21 @@ function App() {
             </div>
             <div className="hourly-strip">
               {forecast.hourly.slice(0, 12).map((hour, index) => {
-                const meta = getWeatherMeta(hour.weatherCode, forecast.current.isDay);
+                const meta = getWeatherMeta(
+                  hour.weatherCode,
+                  forecast.current.isDay,
+                );
 
                 return (
                   <article key={hour.time} className="hour-card">
                     <span>{index === 0 ? "Now" : formatHour(hour.time)}</span>
                     <WeatherIcon kind={meta.kind} size={30} />
-                    <strong>{formatTemperature(hour.temperature, units)}</strong>
-                    <small>{Math.round(hour.precipitationProbability)}% rain</small>
+                    <strong>
+                      {formatTemperature(hour.temperature, units)}
+                    </strong>
+                    <small>
+                      {Math.round(hour.precipitationProbability)}% rain
+                    </small>
                   </article>
                 );
               })}
@@ -456,7 +545,11 @@ function App() {
             <div className="daily-list">
               {forecast.daily.map((day) => {
                 const meta = getWeatherMeta(day.weatherCode, true);
-                const range = getTemperatureRange(day.minTemperature, day.maxTemperature, forecast.daily);
+                const range = getTemperatureRange(
+                  day.minTemperature,
+                  day.maxTemperature,
+                  forecast.daily,
+                );
 
                 return (
                   <article key={day.date} className="daily-row">
@@ -466,12 +559,20 @@ function App() {
                     </div>
                     <span>{meta.label}</span>
                     <div className="range-bar" aria-hidden="true">
-                      <i style={{ left: `${range.left}%`, width: `${range.width}%` }} />
+                      <i
+                        style={{
+                          left: `${range.left}%`,
+                          width: `${range.width}%`,
+                        }}
+                      />
                     </div>
                     <strong>
-                      {formatTemperature(day.maxTemperature, units)} / {formatTemperature(day.minTemperature, units)}
+                      {formatTemperature(day.maxTemperature, units)} /{" "}
+                      {formatTemperature(day.minTemperature, units)}
                     </strong>
-                    <small>{formatPrecipitation(day.precipitationSum, units)}</small>
+                    <small>
+                      {formatPrecipitation(day.precipitationSum, units)}
+                    </small>
                   </article>
                 );
               })}
@@ -489,7 +590,13 @@ function App() {
               </div>
 
               <div className={`usage-status usage-status--${usageStatus}`}>
-                <span>{usageStatus === "live" ? "Live" : usageStatus === "preview" ? "Desktop only" : "Checking"}</span>
+                <span>
+                  {usageStatus === "live"
+                    ? "Live"
+                    : usageStatus === "preview"
+                      ? "Desktop only"
+                      : "Checking"}
+                </span>
                 <strong>{usage ? `PID ${usage.pid}` : "--"}</strong>
               </div>
 
@@ -512,9 +619,13 @@ function App() {
                 <span>Refresh</span>
                 <strong>2 seconds</strong>
                 <span>Virtual</span>
-                <strong>{usage ? formatBytes(usage.virtualMemoryBytes) : "--"}</strong>
+                <strong>
+                  {usage ? formatBytes(usage.virtualMemoryBytes) : "--"}
+                </strong>
                 <span>Sample</span>
-                <strong>{usage ? formatUpdated(usage.timestampMs) : "--"}</strong>
+                <strong>
+                  {usage ? formatUpdated(usage.timestampMs) : "--"}
+                </strong>
               </div>
             </section>
 
@@ -528,7 +639,7 @@ function App() {
               </div>
 
               <div className="aqi-dial">
-                <span>US AQI</span>
+                <span>AQI</span>
                 <strong>{forecast.airQuality?.aqi ?? "--"}</strong>
                 <p>{forecast.airQuality?.label ?? "Unavailable"}</p>
               </div>
@@ -536,25 +647,36 @@ function App() {
               <div className="side-list">
                 <div>
                   <span>PM2.5</span>
-                  <strong>{forecast.airQuality?.pm25?.toFixed(1) ?? "--"} ug/m3</strong>
+                  <strong>
+                    {forecast.airQuality?.pm25?.toFixed(1) ?? "--"} ug/m3
+                  </strong>
                 </div>
                 <div>
                   <span>PM10</span>
-                  <strong>{forecast.airQuality?.pm10?.toFixed(1) ?? "--"} ug/m3</strong>
+                  <strong>
+                    {forecast.airQuality?.pm10?.toFixed(1) ?? "--"} ug/m3
+                  </strong>
                 </div>
                 <div>
                   <span>Ozone</span>
-                  <strong>{forecast.airQuality?.ozone?.toFixed(0) ?? "--"} ug/m3</strong>
+                  <strong>
+                    {forecast.airQuality?.ozone?.toFixed(0) ?? "--"} ug/m3
+                  </strong>
                 </div>
                 <div>
                   <span>Wind direction</span>
                   <strong>
-                    <Compass size={15} /> {compassDirection(forecast.current.windDirection)}
+                    <Compass size={15} />{" "}
+                    {compassDirection(forecast.current.windDirection)}
                   </strong>
                 </div>
                 <div>
                   <span>Elevation</span>
-                  <strong>{forecast.elevation ? `${Math.round(forecast.elevation)} m` : "--"}</strong>
+                  <strong>
+                    {forecast.elevation
+                      ? `${Math.round(forecast.elevation)} m`
+                      : "--"}
+                  </strong>
                 </div>
                 <div>
                   <span>Updated</span>
@@ -632,7 +754,7 @@ function ResourceMeter({
   label,
   fill,
   display,
-  tone
+  tone,
 }: {
   icon: ReactNode;
   label: string;
@@ -657,44 +779,57 @@ function ResourceMeter({
 }
 
 function buildInsights(forecast: ForecastData, units: Units) {
-  const nextRain = forecast.hourly.find((hour) => hour.precipitationProbability >= 50);
-  const topWind = forecast.hourly.slice(0, 12).reduce((max, hour) => Math.max(max, hour.windGusts), 0);
+  const nextRain = forecast.hourly.find(
+    (hour) => hour.precipitationProbability >= 50,
+  );
+  const topWind = forecast.hourly
+    .slice(0, 12)
+    .reduce((max, hour) => Math.max(max, hour.windGusts), 0);
   const warmest = forecast.hourly
     .slice(0, 12)
-    .reduce((max, hour) => Math.max(max, hour.temperature), forecast.hourly[0]?.temperature ?? 0);
+    .reduce(
+      (max, hour) => Math.max(max, hour.temperature),
+      forecast.hourly[0]?.temperature ?? 0,
+    );
 
   return [
     {
       label: "Rain window",
       value: nextRain ? formatHour(nextRain.time) : "Low",
-      detail: nextRain ? `${Math.round(nextRain.precipitationProbability)}% probability` : "No sharp rain signal",
-      tone: "rain"
+      detail: nextRain
+        ? `${Math.round(nextRain.precipitationProbability)}% probability`
+        : "No sharp rain signal",
+      tone: "rain",
     },
     {
       label: "Warmest",
       value: formatTemperature(warmest, units),
       detail: "Highest temperature in the next 12 hours",
-      tone: "sun"
+      tone: "sun",
     },
     {
       label: "Gust ceiling",
       value: formatWind(topWind, units),
-      detail: topWind > 35 ? "Secure loose outdoor items" : "No strong gust spike",
-      tone: "wind"
+      detail:
+        topWind > 35 ? "Secure loose outdoor items" : "No strong gust spike",
+      tone: "wind",
     },
     {
       label: "Air quality",
       value: forecast.airQuality?.label ?? "Unknown",
-      detail: forecast.airQuality?.aqi ? `US AQI ${forecast.airQuality.aqi}` : "No air reading",
-      tone: "air"
-    }
+      detail: forecast.airQuality?.aqi
+        ? `AQI ${forecast.airQuality.aqi}`
+        : "No air reading",
+      tone: "air",
+    },
   ];
 }
 
 function isSamePlace(a: Place, b: Place): boolean {
   return (
     a.id === b.id ||
-    (Math.abs(a.latitude - b.latitude) < 0.03 && Math.abs(a.longitude - b.longitude) < 0.03)
+    (Math.abs(a.latitude - b.latitude) < 0.03 &&
+      Math.abs(a.longitude - b.longitude) < 0.03)
   );
 }
 
@@ -712,8 +847,15 @@ function formatPlace(place: Place): string {
   return [place.name, place.admin1, place.country].filter(Boolean).join(", ");
 }
 
-function getTemperatureRange(min: number, max: number, days: ForecastData["daily"]) {
-  const allTemperatures = days.flatMap((day) => [day.minTemperature, day.maxTemperature]);
+function getTemperatureRange(
+  min: number,
+  max: number,
+  days: ForecastData["daily"],
+) {
+  const allTemperatures = days.flatMap((day) => [
+    day.minTemperature,
+    day.maxTemperature,
+  ]);
   const lowest = Math.min(...allTemperatures);
   const highest = Math.max(...allTemperatures);
   const spread = Math.max(highest - lowest, 1);
@@ -751,7 +893,7 @@ function compassDirection(degrees: number): string {
 function formatUpdated(value: string | number): string {
   return new Intl.DateTimeFormat(undefined, {
     hour: "numeric",
-    minute: "2-digit"
+    minute: "2-digit",
   }).format(new Date(value));
 }
 
