@@ -43,6 +43,12 @@ body {
   margin: 0;
   background: var(--bg);
   overflow-x: hidden;
+  scrollbar-width: none;
+}
+
+body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 button,
@@ -316,6 +322,13 @@ button {
   gap: 8px;
   padding: 2px 0 16px;
   overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.place-shelf::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .place-shelf button {
@@ -994,6 +1007,13 @@ button {
   gap: 10px;
   overflow-x: auto;
   padding-bottom: 4px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.hourly-strip::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .hour-card {
