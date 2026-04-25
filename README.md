@@ -2,6 +2,13 @@
 
 SkyCast is a Tauri desktop weather dashboard built with React, Vite, and Open-Meteo's no-key public APIs.
 
+## Screenshots
+<img width="1852" height="1024" alt="image" src="https://github.com/user-attachments/assets/46e62d86-3c3b-472e-96dd-ef0fa4ee2396" />
+
+<img width="1919" height="1032" alt="image" src="https://github.com/user-attachments/assets/363d18d6-8920-4ae6-b919-23429c29c6cf" />
+
+
+
 ## Features
 
 - City search with geocoding
