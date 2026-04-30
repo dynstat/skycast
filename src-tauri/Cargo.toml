@@ -5,6 +5,11 @@ description = "A modern Tauri weather forecasting dashboard"
 authors = ["Vivek"]
 edition = "2024"
 
+[lib]
+name = "skycast_lib"
+path = "src/lib.rs"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

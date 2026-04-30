@@ -32,6 +32,7 @@
       }
     ],
     "security": {
+      "capabilities": ["default"],
       "csp": "default-src 'self'; connect-src 'self' https://api.open-meteo.com https://geocoding-api.open-meteo.com https://air-quality-api.open-meteo.com https://api.waqi.info; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'"
     }
   }

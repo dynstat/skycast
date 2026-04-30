@@ -4,10 +4,17 @@
       "settings": {
         "workingDirectories": [
           {
-            "mode": "auto"
-          }
-        ]
-      }
-    }
-  }
+            "mode": "auto",
+          },
+        ],
+      },
+    },
+    "rust-analyzer": {
+      "initialization_options": {
+        "check": {
+          "command": "check",
+        },
+      },
+    },
+  },
 }
