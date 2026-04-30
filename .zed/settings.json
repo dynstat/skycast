@@ -1,0 +1,13 @@
+{
+  "lsp": {
+    "eslint": {
+      "settings": {
+        "workingDirectories": [
+          {
+            "mode": "auto"
+          }
+        ]
+      }
+    }
+  }
+}
