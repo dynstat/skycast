@@ -96,7 +96,7 @@ type GeocodeResponse = {
   results?: GeocodeResult[];
 };
 
-type WeatherApiResponse = {
+type OpenMeteoResponse = {
   timezone: string;
   timezone_abbreviation?: string;
   elevation?: number;
@@ -150,12 +150,137 @@ type WeatherApiResponse = {
   };
 };
 
+type WeatherApiDotComResponse = {
+  location: {
+    name: string;
+    region: string;
+    country: string;
+    lat: number;
+    lon: number;
+    tz_id: string;
+    localtime_epoch: number;
+    localtime: string;
+  };
+  current: {
+    last_updated_epoch: number;
+    last_updated: string;
+    temp_c: number;
+    temp_f: number;
+    is_day: number;
+    condition: {
+      text: string;
+      icon: string;
+      code: number;
+    };
+    wind_mph: number;
+    wind_kph: number;
+    wind_degree: number;
+    wind_dir: string;
+    pressure_mb: number;
+    pressure_in: number;
+    precip_mm: number;
+    precip_in: number;
+    humidity: number;
+    cloud: number;
+    feelslike_c: number;
+    feelslike_f: number;
+    vis_km: number;
+    vis_miles: number;
+    uv: number;
+    gust_mph: number;
+    gust_kph: number;
+  };
+  forecast: {
+    forecastday: Array<{
+      date: string;
+      date_epoch: number;
+      day: {
+        maxtemp_c: number;
+        maxtemp_f: number;
+        mintemp_c: number;
+        mintemp_f: number;
+        avgtemp_c: number;
+        avgtemp_f: number;
+        maxwind_mph: number;
+        maxwind_kph: number;
+        totalprecip_mm: number;
+        totalprecip_in: number;
+        totalsnow_cm: number;
+        avgvis_km: number;
+        avgvis_miles: number;
+        avghumidity: number;
+        daily_will_it_rain: number;
+        daily_chance_of_rain: number;
+        daily_will_it_snow: number;
+        daily_chance_of_snow: number;
+        condition: {
+          text: string;
+          icon: string;
+          code: number;
+        };
+        uv: number;
+      };
+      astro: {
+        sunrise: string;
+        sunset: string;
+        moonrise: string;
+        moonset: string;
+        moon_phase: string;
+        moon_illumination: number;
+        is_moon_up: number;
+        is_sun_up: number;
+      };
+      hour: Array<{
+        time_epoch: number;
+        time: string;
+        temp_c: number;
+        temp_f: number;
+        is_day: number;
+        condition: {
+          text: string;
+          icon: string;
+          code: number;
+        };
+        wind_mph: number;
+        wind_kph: number;
+        wind_degree: number;
+        wind_dir: string;
+        pressure_mb: number;
+        pressure_in: number;
+        precip_mm: number;
+        precip_in: number;
+        snow_cm: number;
+        humidity: number;
+        cloud: number;
+        feelslike_c: number;
+        feelslike_f: number;
+        windchill_c: number;
+        windchill_f: number;
+        heatindex_c: number;
+        heatindex_f: number;
+        dewpoint_c: number;
+        dewpoint_f: number;
+        will_it_rain: number;
+        chance_of_rain: number;
+        will_it_snow: number;
+        chance_of_snow: number;
+        vis_km: number;
+        vis_miles: number;
+        gust_mph: number;
+        gust_kph: number;
+        uv: number;
+      }>;
+    }>;
+  };
+};
+
 type AirQualityResponse = {
   hourly?: {
     time: string[];
     pm2_5?: number[];
     pm10?: number[];
     ozone?: number[];
+    us_aqi?: number[];
   };
 };
 
@@ -175,7 +300,9 @@ const FORECAST_BASE = "https://api.open-meteo.com/v1/forecast";
 const GEOCODE_BASE = "https://geocoding-api.open-meteo.com/v1";
 const AIR_BASE = "https://air-quality-api.open-meteo.com/v1/air-quality";
 const WAQI_BASE = "https://api.waqi.info/feed";
+const WEATHER_API_BASE = "https://api.weatherapi.com/v1";
 const WAQI_TOKEN = import.meta.env.VITE_WAQI_TOKEN?.trim() ?? "";
+const WEATHER_API_KEY = import.meta.env.VITE_WEATHER_API_KEY?.trim() ?? "";
 
 export const DEFAULT_PLACE: Place = {
   id: "1275339",
@@ -255,6 +382,26 @@ export async function reverseGeocode(
 export async function fetchForecast(
   place: Place,
   signal?: AbortSignal,
+  waqiToken?: string,
+  weatherApiKey?: string,
+): Promise<ForecastData> {
+  const apiKey = weatherApiKey || WEATHER_API_KEY;
+
+  if (apiKey) {
+    try {
+      return await fetchWeatherApiForecast(place, apiKey, signal, waqiToken);
+    } catch {
+      // Fall back to Open-Meteo if WeatherAPI.com fails.
+    }
+  }
+
+  return fetchOpenMeteoForecast(place, signal, waqiToken);
+}
+
+async function fetchOpenMeteoForecast(
+  place: Place,
+  signal?: AbortSignal,
+  waqiToken?: string,
 ): Promise<ForecastData> {
   const url = new URL(FORECAST_BASE);
 
@@ -311,8 +458,8 @@ export async function fetchForecast(
   }).toString();
 
   const [weather, airQuality] = await Promise.all([
-    fetchJson<WeatherApiResponse>(url.toString(), signal),
-    fetchAirQuality(place, signal).catch(() => null),
+    fetchJson<OpenMeteoResponse>(url.toString(), signal),
+    fetchAirQuality(place, signal, waqiToken).catch(() => null),
   ]);
 
   return {
@@ -345,13 +492,95 @@ export async function fetchForecast(
   };
 }
 
+async function fetchWeatherApiForecast(
+  place: Place,
+  apiKey: string,
+  signal?: AbortSignal,
+  waqiToken?: string,
+): Promise<ForecastData> {
+  const url = new URL(`${WEATHER_API_BASE}/forecast.json`);
+
+  url.search = new URLSearchParams({
+    key: apiKey,
+    q: `${place.latitude},${place.longitude}`,
+    days: "10",
+    aqi: "no",
+    alerts: "no",
+  }).toString();
+
+  const [weather, airQuality] = await Promise.all([
+    fetchJson<WeatherApiDotComResponse>(url.toString(), signal),
+    fetchAirQuality(place, signal, waqiToken).catch(() => null),
+  ]);
+
+  return {
+    place,
+    current: {
+      time: weather.current.last_updated,
+      temperature: weather.current.temp_c,
+      humidity: weather.current.humidity,
+      apparentTemperature: weather.current.feelslike_c,
+      isDay: weather.current.is_day === 1,
+      precipitation: weather.current.precip_mm,
+      rain: weather.current.precip_mm,
+      showers: 0,
+      snowfall: 0,
+      weatherCode: weather.current.condition.code,
+      cloudCover: weather.current.cloud,
+      pressure: weather.current.pressure_mb,
+      surfacePressure: weather.current.pressure_mb,
+      windSpeed: weather.current.wind_kph,
+      windDirection: weather.current.wind_degree,
+      windGusts: weather.current.gust_kph,
+    },
+    hourly: weather.forecast.forecastday[0].hour.map((h) => ({
+      time: h.time,
+      temperature: h.temp_c,
+      apparentTemperature: h.feelslike_c,
+      humidity: h.humidity,
+      precipitationProbability: h.chance_of_rain,
+      precipitation: h.precip_mm,
+      weatherCode: h.condition.code,
+      cloudCover: h.cloud,
+      windSpeed: h.wind_kph,
+      windGusts: h.gust_kph,
+      uvIndex: h.uv,
+      visibility: h.vis_km,
+      pressure: h.pressure_mb,
+    })),
+    daily: weather.forecast.forecastday.map((d) => ({
+      date: d.date,
+      weatherCode: d.day.condition.code,
+      maxTemperature: d.day.maxtemp_c,
+      minTemperature: d.day.mintemp_c,
+      apparentMax: d.day.maxtemp_c,
+      apparentMin: d.day.mintemp_c,
+      sunrise: d.astro.sunrise,
+      sunset: d.astro.sunset,
+      uvIndexMax: d.day.uv,
+      precipitationSum: d.day.totalprecip_mm,
+      precipitationProbabilityMax: d.day.daily_chance_of_rain,
+      windSpeedMax: d.day.maxwind_kph,
+      windGustsMax: d.day.maxwind_kph,
+    })),
+    airQuality,
+    updatedAt: new Date().toISOString(),
+    timezone: weather.location.tz_id,
+    timezoneAbbreviation: "",
+    elevation: 0,
+  };
+}
+
 async function fetchAirQuality(
   place: Place,
   signal?: AbortSignal,
+  waqiToken?: string,
 ): Promise<AirQuality | null> {
-  if (WAQI_TOKEN) {
+  const token = waqiToken || WAQI_TOKEN;
+
+  if (token) {
     try {
-      return await fetchWaqiAirQuality(place, signal);
+      return await fetchWaqiAirQuality(place, signal, token);
     } catch {
       // Fall back to the existing source if WAQI is unavailable.
     }
@@ -363,8 +592,10 @@ async function fetchAirQuality(
 async function fetchWaqiAirQuality(
   place: Place,
   signal?: AbortSignal,
+  waqiToken?: string,
 ): Promise<AirQuality | null> {
-  const url = `${WAQI_BASE}/geo:${place.latitude};${place.longitude}/?token=${encodeURIComponent(WAQI_TOKEN)}`;
+  const token = waqiToken || WAQI_TOKEN;
+  const url = `${WAQI_BASE}/geo:${place.latitude};${place.longitude}/?token=${encodeURIComponent(token)}`;
   const data = await fetchJson<WaqiResponse>(url, signal);
 
   if (data.status !== "ok" || !data.data) {
@@ -394,7 +625,7 @@ async function fetchOpenMeteoAirQuality(
   url.search = new URLSearchParams({
     latitude: String(place.latitude),
     longitude: String(place.longitude),
-    hourly: "pm2_5,pm10,ozone",
+    hourly: "pm2_5,pm10,ozone,us_aqi",
     timezone: "auto",
     forecast_days: "2",
   }).toString();
@@ -410,7 +641,10 @@ async function fetchOpenMeteoAirQuality(
   const pm25 = nullableNumber(hourly.pm2_5?.[index]);
   const pm10 = nullableNumber(hourly.pm10?.[index]);
   const ozone = nullableNumber(hourly.ozone?.[index]);
-  const aqi = calculateUsAqi(pm25, pm10);
+
+  // Use the native US AQI from Open-Meteo if available, otherwise calculate it.
+  const aqi =
+    nullableNumber(hourly.us_aqi?.[index]) ?? calculateUsAqi(pm25, pm10);
 
   return {
     aqi,
@@ -431,7 +665,7 @@ async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-function mapHourly(weather: WeatherApiResponse): HourlyWeather[] {
+function mapHourly(weather: OpenMeteoResponse): HourlyWeather[] {
   const hourly = weather.hourly;
 
   return hourly.time.map((time, index) => ({
@@ -453,7 +687,7 @@ function mapHourly(weather: WeatherApiResponse): HourlyWeather[] {
   }));
 }
 
-function mapDaily(weather: WeatherApiResponse): DailyWeather[] {
+function mapDaily(weather: OpenMeteoResponse): DailyWeather[] {
   const daily = weather.daily;
 
   return daily.time.map((date, index) => ({
@@ -515,10 +749,17 @@ function getAqiLabel(aqi: number | null): string {
   return "Hazardous";
 }
 
-function calculateUsAqi(pm25: number | null, pm10: number | null): number | null {
+function calculateUsAqi(
+  pm25: number | null,
+  pm10: number | null,
+): number | null {
   const components = [
-    pm25 === null ? null : calculateAqiFromBreakpoint(truncatePm25(pm25), PM25_BREAKPOINTS),
-    pm10 === null ? null : calculateAqiFromBreakpoint(Math.round(pm10), PM10_BREAKPOINTS)
+    pm25 === null
+      ? null
+      : calculateAqiFromBreakpoint(truncatePm25(pm25), PM25_BREAKPOINTS),
+    pm10 === null
+      ? null
+      : calculateAqiFromBreakpoint(Math.round(pm10), PM10_BREAKPOINTS),
   ].filter((value): value is number => value !== null);
 
   if (components.length === 0) {
@@ -530,10 +771,12 @@ function calculateUsAqi(pm25: number | null, pm10: number | null): number | null
 
 function calculateAqiFromBreakpoint(
   concentration: number,
-  breakpoints: readonly Breakpoint[]
+  breakpoints: readonly Breakpoint[],
 ): number | null {
   const matching = breakpoints.find(
-    (breakpoint) => concentration >= breakpoint.concLow && concentration <= breakpoint.concHigh
+    (breakpoint) =>
+      concentration >= breakpoint.concLow &&
+      concentration <= breakpoint.concHigh,
   );
 
   if (!matching) {
@@ -546,9 +789,12 @@ function calculateAqiFromBreakpoint(
     return null;
   }
 
-  const ratio = (concentration - matching.concLow) / (matching.concHigh - matching.concLow);
+  const ratio =
+    (concentration - matching.concLow) / (matching.concHigh - matching.concLow);
 
-  return Math.round(ratio * (matching.aqiHigh - matching.aqiLow) + matching.aqiLow);
+  return Math.round(
+    ratio * (matching.aqiHigh - matching.aqiLow) + matching.aqiLow,
+  );
 }
 
 function truncatePm25(value: number): number {
@@ -569,7 +815,7 @@ const PM25_BREAKPOINTS: readonly Breakpoint[] = [
   { aqiLow: 151, aqiHigh: 200, concLow: 55.5, concHigh: 150.4 },
   { aqiLow: 201, aqiHigh: 300, concLow: 150.5, concHigh: 250.4 },
   { aqiLow: 301, aqiHigh: 400, concLow: 250.5, concHigh: 350.4 },
-  { aqiLow: 401, aqiHigh: 500, concLow: 350.5, concHigh: 500.4 }
+  { aqiLow: 401, aqiHigh: 500, concLow: 350.5, concHigh: 500.4 },
 ] as const;
 
 const PM10_BREAKPOINTS: readonly Breakpoint[] = [
@@ -579,7 +825,7 @@ const PM10_BREAKPOINTS: readonly Breakpoint[] = [
   { aqiLow: 151, aqiHigh: 200, concLow: 255, concHigh: 354 },
   { aqiLow: 201, aqiHigh: 300, concLow: 355, concHigh: 424 },
   { aqiLow: 301, aqiHigh: 400, concLow: 425, concHigh: 504 },
-  { aqiLow: 401, aqiHigh: 500, concLow: 505, concHigh: 604 }
+  { aqiLow: 401, aqiHigh: 500, concLow: 505, concHigh: 604 },
 ] as const;
 
 function safeNumber(value: unknown, fallback = 0): number {

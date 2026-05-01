@@ -3,6 +3,7 @@ dist
 dist-ssr
 target
 src-tauri/target
+.env
 *.log
 *.local
 .DS_Store

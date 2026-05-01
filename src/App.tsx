@@ -26,7 +26,9 @@ import {
   Thermometer,
   Umbrella,
   Wind,
+  X,
   Zap,
+  Settings,
 } from "lucide-react";
 import { ForecastChart, type ChartMode } from "./components/ForecastChart";
 import { MetricCard } from "./components/MetricCard";
@@ -68,6 +70,8 @@ const STORAGE_KEYS = {
   place: "skycast.selectedPlace",
   units: "skycast.units",
   favorites: "skycast.favorites",
+  waqiToken: "skycast.waqiToken",
+  weatherApiKey: "skycast.weatherApiKey",
 };
 
 function App() {
@@ -80,6 +84,15 @@ function App() {
     STORAGE_KEYS.favorites,
     [DEFAULT_PLACE],
   );
+  const [waqiToken, setWaqiToken] = useStoredState<string>(
+    STORAGE_KEYS.waqiToken,
+    "",
+  );
+  const [weatherApiKey, setWeatherApiKey] = useStoredState<string>(
+    STORAGE_KEYS.weatherApiKey,
+    "",
+  );
+  const [showSettings, setShowSettings] = useState(false);
   const [forecast, setForecast] = useState<ForecastData | null>(null);
   const [status, setStatus] = useState<LoadStatus>("loading");
   const [error, setError] = useState("");
@@ -96,7 +109,12 @@ function App() {
       setError("");
 
       try {
-        const data = await fetchForecast(place, signal);
+        const data = await fetchForecast(
+          place,
+          signal,
+          waqiToken,
+          weatherApiKey,
+        );
 
         if (!signal?.aborted) {
           setForecast(data);
@@ -113,7 +131,7 @@ function App() {
         );
       }
     },
-    [],
+    [waqiToken, weatherApiKey],
   );
 
   useEffect(() => {
@@ -351,8 +369,105 @@ function App() {
           >
             <Star size={18} fill={placeIsFavorite ? "currentColor" : "none"} />
           </button>
+          <button
+            className={`icon-button ${showSettings ? "is-active" : ""}`}
+            type="button"
+            onClick={() => setShowSettings(!showSettings)}
+            title="Settings"
+          >
+            <Settings size={18} />
+          </button>
         </div>
       </header>
+
+      {showSettings && (
+        <section className="settings-panel panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Application Settings</p>
+              <h2>API Configuration</h2>
+            </div>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => setShowSettings(false)}
+            >
+              <X size={18} />
+            </button>
+          </div>
+          <div className="settings-content">
+            <div className="settings-field">
+              <label htmlFor="waqi-token">WAQI API Token (Optional)</label>
+              <p className="field-desc">
+                The app uses Open-Meteo models by default. For higher accuracy
+                ground-station readings, get a free token from{" "}
+                <a
+                  href="https://aqicn.org/data-platform/token/"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  aqicn.org
+                </a>
+                .
+              </p>
+              <div className="token-input-row">
+                <input
+                  id="waqi-token"
+                  type="password"
+                  value={waqiToken}
+                  onChange={(e) => setWaqiToken(e.target.value)}
+                  placeholder="Paste your token here..."
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSettings(false);
+                    handleRefresh();
+                  }}
+                >
+                  Save & Sync
+                </button>
+              </div>
+            </div>
+
+            <div className="settings-field">
+              <label htmlFor="weather-api-key">
+                WeatherAPI.com Key (Optional)
+              </label>
+              <p className="field-desc">
+                The app uses Open-Meteo by default. For more accurate local
+                weather in India, get a free key from{" "}
+                <a
+                  href="https://www.weatherapi.com/signup.aspx"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  weatherapi.com
+                </a>
+                .
+              </p>
+              <div className="token-input-row">
+                <input
+                  id="weather-api-key"
+                  type="password"
+                  value={weatherApiKey}
+                  onChange={(e) => setWeatherApiKey(e.target.value)}
+                  placeholder="Paste your API key here..."
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSettings(false);
+                    handleRefresh();
+                  }}
+                >
+                  Save & Sync
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="place-shelf" aria-label="Saved locations">
         {placeShelf.map((place) => (
